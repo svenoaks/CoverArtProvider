@@ -40,7 +40,7 @@ class Album constructor(
             ) ?: return emptyList()
 
             cur.use {
-                return Album.buildAlbumList(cur, context.resources)
+                return buildAlbumList(cur, context.resources)
             }
         }
         private fun buildAlbumList(cur: Cursor, res: Resources, artistId: Long = -1L): List<Album> {

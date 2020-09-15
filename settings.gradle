@@ -1,0 +1,3 @@
+include ':coverartprovider'
+include ':app'
+rootProject.name = "CoverArtProvider"

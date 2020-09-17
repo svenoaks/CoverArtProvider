@@ -1,8 +1,12 @@
 package com.smp.coverartprovider
 
-import android.content.Context
+import android.content.ContentUris
+import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
+import android.graphics.Bitmap
+import android.graphics.Point
+import android.os.Build
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract.Document
@@ -10,7 +14,11 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
+import java.io.File
 import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.IOException
 
 fun LOGI(msg: String) {
     Log.i("COVERLOG", msg)
@@ -41,6 +49,7 @@ class CoverArtProvider : DocumentsProvider() {
         Document.COLUMN_LAST_MODIFIED,
         Document.COLUMN_SUMMARY
     )
+
     override fun onCreate(): Boolean = true
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
@@ -56,6 +65,41 @@ class CoverArtProvider : DocumentsProvider() {
         }
     }
 
+    override fun openDocumentThumbnail(
+        documentId: String,
+        sizeHint: Point,
+        signal: CancellationSignal
+    ): AssetFileDescriptor? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            return null
+        } else {
+            val uri = ContentUris.withAppendedId(
+                MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
+                documentId.toLong()
+            )
+            val size = Size(sizeHint.x, sizeHint.y)
+            val bitmap = context!!.contentResolver.loadThumbnail(uri, size, null)
+            // Write out the thumbnail to a temporary file
+            val tempFile: File = File.createTempFile("thumbnail", null, context!!.cacheDir)
+
+            FileOutputStream(tempFile).use { out ->
+                try {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+                } catch (e: IOException) {
+                    return null
+                }
+                return AssetFileDescriptor(
+                    ParcelFileDescriptor.open(
+                        tempFile,
+                        ParcelFileDescriptor.MODE_READ_ONLY
+                    ), 0,
+                    AssetFileDescriptor.UNKNOWN_LENGTH
+                )
+            }
+        }
+    }
+
+
     override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
         //Fix, inefficient
         LOGI(documentId)
@@ -63,8 +107,9 @@ class CoverArtProvider : DocumentsProvider() {
             if (documentId == "root") {
                 makeRootRow(this)
             } else {
-                val album = Album.getAllAlbums(context!!).find { it.albumId == documentId.toLong() }
-                    ?: throw FileNotFoundException()
+                val album =
+                    Album.getAllAlbums(context!!).find { it.albumId == documentId.toLong() }
+                        ?: throw FileNotFoundException()
                 makeAlbumRow(this, album)
             }
         }
@@ -91,40 +136,40 @@ class CoverArtProvider : DocumentsProvider() {
         }
     }
 
-   /* val SONG_PROJECTION = arrayOf(
-        MediaStore.Audio.Media.TITLE,
-        MediaStore.Audio.Media._ID,
-        MediaStore.Audio.Media.ARTIST,
-        MediaStore.Audio.Media.ALBUM,
-        MediaStore.Audio.Media.DURATION,
-        MediaStore.Audio.Media.DATA,
-        MediaStore.Audio.Media.YEAR,
-        MediaStore.Audio.Media.DATE_ADDED,
-        MediaStore.Audio.Media.ALBUM_ID,
-        MediaStore.Audio.Media.ARTIST_ID,
-        MediaStore.Audio.Media.TRACK,
-        MediaStore.Audio.Media.DATE_MODIFIED,
-        MediaStore.Audio.Media.IS_ALARM,
-        MediaStore.Audio.Media.IS_RINGTONE,
-        MediaStore.Audio.Media.IS_PODCAST,
-        MediaStore.Audio.Media.IS_NOTIFICATION,
-        MediaStore.Audio.Media.IS_MUSIC)
+    /* val SONG_PROJECTION = arrayOf(
+         MediaStore.Audio.Media.TITLE,
+         MediaStore.Audio.Media._ID,
+         MediaStore.Audio.Media.ARTIST,
+         MediaStore.Audio.Media.ALBUM,
+         MediaStore.Audio.Media.DURATION,
+         MediaStore.Audio.Media.DATA,
+         MediaStore.Audio.Media.YEAR,
+         MediaStore.Audio.Media.DATE_ADDED,
+         MediaStore.Audio.Media.ALBUM_ID,
+         MediaStore.Audio.Media.ARTIST_ID,
+         MediaStore.Audio.Media.TRACK,
+         MediaStore.Audio.Media.DATE_MODIFIED,
+         MediaStore.Audio.Media.IS_ALARM,
+         MediaStore.Audio.Media.IS_RINGTONE,
+         MediaStore.Audio.Media.IS_PODCAST,
+         MediaStore.Audio.Media.IS_NOTIFICATION,
+         MediaStore.Audio.Media.IS_MUSIC)
 
-    fun getAllSongs(context: Context, sortOrder: String = SongSortOrder.SONG_A_Z): List<String> {
-        val musicSelection = MediaStore.Audio.Media.IS_MUSIC + " != 0" + " AND " + MediaStore.Audio.AudioColumns.TITLE + " != ''"
-        val cur = context.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            SONG_PROJECTION,
-            musicSelection,
-            null,
-            sortOrder
-        )
-            ?: return emptyList()
-        cur.use {
-            LOGI("songs = " + cur.count)
-            return listOf()
-        }
-    }*/
+     fun getAllSongs(context: Context, sortOrder: String = SongSortOrder.SONG_A_Z): List<String> {
+         val musicSelection = MediaStore.Audio.Media.IS_MUSIC + " != 0" + " AND " + MediaStore.Audio.AudioColumns.TITLE + " != ''"
+         val cur = context.contentResolver.query(
+             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+             SONG_PROJECTION,
+             musicSelection,
+             null,
+             sortOrder
+         )
+             ?: return emptyList()
+         cur.use {
+             LOGI("songs = " + cur.count)
+             return listOf()
+         }
+     }*/
 
     override fun queryChildDocuments(
         parentDocumentId: String?,
@@ -147,7 +192,7 @@ class CoverArtProvider : DocumentsProvider() {
             add(Document.COLUMN_DOCUMENT_ID, album.albumId.toString())
             add(Document.COLUMN_DISPLAY_NAME, album.albumName)
             add(Document.COLUMN_SUMMARY, album.artistName)
-            add(Document.COLUMN_FLAGS, 0)
+            add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
             add(Document.COLUMN_MIME_TYPE, "image/png")
             add(Document.COLUMN_SIZE, 0)
             add(Document.COLUMN_LAST_MODIFIED, 0)
@@ -160,7 +205,7 @@ class CoverArtProvider : DocumentsProvider() {
         signal: CancellationSignal?
     ): ParcelFileDescriptor? {
         LOGI("open doc " + documentId)
-       return null
+        return null
     }
 
     override fun getDocumentType(documentId: String?): String? {

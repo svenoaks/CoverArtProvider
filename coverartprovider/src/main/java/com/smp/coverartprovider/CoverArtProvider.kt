@@ -128,7 +128,7 @@ class CoverArtProvider : DocumentsProvider() {
             add(Document.COLUMN_DOCUMENT_ID, "root")
             add(Document.COLUMN_DISPLAY_NAME, "root")
             add(Document.COLUMN_SUMMARY, "root")
-            add(Document.COLUMN_FLAGS, 0)
+            add(Document.COLUMN_FLAGS, Document.FLAG_DIR_PREFERS_GRID)
             add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR)
             add(Document.COLUMN_SIZE, 0L)
             add(Document.COLUMN_LAST_MODIFIED, System.currentTimeMillis())
@@ -203,16 +203,17 @@ class CoverArtProvider : DocumentsProvider() {
     }
 
     private fun makeAlbumRow(cursor: MatrixCursor, album: Album) {
-
-        val size = fdFromAlbum(album, fullSize)?.length ?: 0L
-        with(cursor.newRow()) {
-            add(Document.COLUMN_DOCUMENT_ID, album.albumId)
-            add(Document.COLUMN_DISPLAY_NAME, album.albumName)
-            add(Document.COLUMN_SUMMARY, album.artistName)
-            add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
-            add(Document.COLUMN_MIME_TYPE, "image/*")
-            add(Document.COLUMN_SIZE, size)
-            add(Document.COLUMN_LAST_MODIFIED, 0)
+        val fd = fdFromAlbum(album, fullSize)
+        if (fd != null) {
+            with(cursor.newRow()) {
+                add(Document.COLUMN_DOCUMENT_ID, album.albumId)
+                add(Document.COLUMN_DISPLAY_NAME, album.albumName)
+                add(Document.COLUMN_SUMMARY, album.artistName)
+                add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
+                add(Document.COLUMN_MIME_TYPE, "image/*")
+                add(Document.COLUMN_SIZE, fd.length)
+                add(Document.COLUMN_LAST_MODIFIED, 0)
+            }
         }
     }
 
@@ -226,6 +227,14 @@ class CoverArtProvider : DocumentsProvider() {
             fdFromAlbum(album[0], fullSize)?.parcelFileDescriptor
         } else {
             null
+        }
+    }
+
+    override fun getDocumentType(documentId: String): String {
+        return if (documentId == "root") {
+            Document.MIME_TYPE_DIR
+        } else {
+            "image/*"
         }
     }
 }

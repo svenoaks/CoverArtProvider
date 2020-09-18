@@ -3,4 +3,5 @@
     <string name="title_root">Cover art</string>
     <string name="unknown_album">unknown_album</string>
     <string name="unknown_artist">unknown_artist</string>
+    <string name="unknown_song">unknown</string>
 </resources>

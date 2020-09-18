@@ -27,7 +27,7 @@ fun LOGI(msg: String) {
 class CoverArtProvider : DocumentsProvider() {
 
 
-    val fullSize: Point
+    private val fullSize: Point
         get() {
             val x = Resources.getSystem().displayMetrics.widthPixels * 2
             val y = Resources.getSystem().displayMetrics.heightPixels * 2
@@ -35,7 +35,7 @@ class CoverArtProvider : DocumentsProvider() {
         }
 
 
-    private val DEFAULT_ROOT_PROJECTION = arrayOf(
+    private val rootProjection = arrayOf(
         Root.COLUMN_ROOT_ID,
         Root.COLUMN_FLAGS,
         Root.COLUMN_TITLE,
@@ -43,11 +43,7 @@ class CoverArtProvider : DocumentsProvider() {
         Root.COLUMN_ICON
     )
 
-    /**
-     * Default document projection: everything but Document.COLUMN_ICON and
-     * Document.COLUMN_SUMMARY
-     */
-    private val DEFAULT_DOCUMENT_PROJECTION = arrayOf(
+    private val documentProjection = arrayOf(
         Document.COLUMN_DOCUMENT_ID,
         Document.COLUMN_DISPLAY_NAME,
         Document.COLUMN_FLAGS,
@@ -60,7 +56,7 @@ class CoverArtProvider : DocumentsProvider() {
     override fun onCreate(): Boolean = true
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
-        return MatrixCursor(projection ?: DEFAULT_ROOT_PROJECTION).apply {
+        return MatrixCursor(projection ?: rootProjection).apply {
             with(newRow()) {
                 add(Root.COLUMN_ROOT_ID, "root")
                 add(Root.COLUMN_DOCUMENT_ID, "root")
@@ -97,10 +93,13 @@ class CoverArtProvider : DocumentsProvider() {
                     uri, "image/*", opts
                 )
             } else {
-                AssetFileDescriptor(ParcelFileDescriptor.open(
-                    File(album.artUri),
-                    ParcelFileDescriptor.MODE_READ_ONLY), 0,
-                    AssetFileDescriptor.UNKNOWN_LENGTH)
+                AssetFileDescriptor(
+                    ParcelFileDescriptor.open(
+                        File(album.artUri),
+                        ParcelFileDescriptor.MODE_READ_ONLY
+                    ), 0,
+                    AssetFileDescriptor.UNKNOWN_LENGTH
+                )
             }
 
         } catch (e: FileNotFoundException) {
@@ -111,7 +110,7 @@ class CoverArtProvider : DocumentsProvider() {
 
     override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
         LOGI(documentId)
-        return MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION).apply {
+        return MatrixCursor(projection ?: documentProjection).apply {
             if (documentId == "root") {
                 makeRootRow(this)
             } else {
@@ -187,7 +186,7 @@ class CoverArtProvider : DocumentsProvider() {
 
         val albums = Album.getAllAlbums(context!!)
 
-        return MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION).apply {
+        return MatrixCursor(projection ?: documentProjection).apply {
             albums.forEach { album ->
                 makeAlbumRow(this, album)
             }
@@ -204,6 +203,13 @@ class CoverArtProvider : DocumentsProvider() {
 
     private fun makeAlbumRow(cursor: MatrixCursor, album: Album) {
         val fd = fdFromAlbum(album, fullSize)
+        val modified = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val songs = Album.getAlbumSongs(context!!, album.albumId)
+            (songs.map { it.dateModified }.maxOrNull() ?: 0L) * 1000L
+        } else {
+            File(album.artUri).lastModified()
+        }
+        LOGI(" Mod " + modified)
         if (fd != null) {
             with(cursor.newRow()) {
                 add(Document.COLUMN_DOCUMENT_ID, album.albumId)
@@ -212,7 +218,7 @@ class CoverArtProvider : DocumentsProvider() {
                 add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
                 add(Document.COLUMN_MIME_TYPE, "image/*")
                 add(Document.COLUMN_SIZE, fd.length)
-                add(Document.COLUMN_LAST_MODIFIED, 0)
+                add(Document.COLUMN_LAST_MODIFIED, modified)
             }
         }
     }

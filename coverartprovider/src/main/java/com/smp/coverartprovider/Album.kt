@@ -24,6 +24,26 @@ class Album constructor(
             }
         }
 
+        private val SONG_PROJECTION = arrayOf(
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ALBUM,
+            MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.DATA,
+            MediaStore.Audio.Media.YEAR,
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.ALBUM_ID,
+            MediaStore.Audio.Media.ARTIST_ID,
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.IS_ALARM,
+            MediaStore.Audio.Media.IS_RINGTONE,
+            MediaStore.Audio.Media.IS_PODCAST,
+            MediaStore.Audio.Media.IS_NOTIFICATION,
+            MediaStore.Audio.Media.IS_MUSIC)
+
+
         private val ALBUM_PROJECTION = arrayOf(
             MediaStore.Audio.Albums._ID,
             MediaStore.Audio.Albums.ALBUM,
@@ -32,6 +52,17 @@ class Album constructor(
             MediaStore.Audio.Albums.LAST_YEAR,
             MediaStore.Audio.Albums.ALBUM_ART
         )
+
+        fun getAlbumSongs(context: Context, albumId: Long): List<MediaTrack> {
+            val audioSelection = MediaStore.Audio.Media.IS_MUSIC + " != 0" + " AND " + MediaStore.Audio.AudioColumns.ALBUM_ID + " = " + albumId + " AND " + MediaStore.Audio.AudioColumns.TITLE + " != ''"
+            val audioCur = context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                SONG_PROJECTION, audioSelection, null, null)
+                ?: return emptyList()
+            audioCur.use {
+                return MediaTrack.buildAudioList(context, audioCur, context.resources).sortedBy { it.trackNumber }
+            }
+        }
 
         fun getAllAlbums(context: Context, sortOrder: String = AlbumSortOrder.ALBUM_A_Z): List<Album> {
             val cur = context.contentResolver.query(

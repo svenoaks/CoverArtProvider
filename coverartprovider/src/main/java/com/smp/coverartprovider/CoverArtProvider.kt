@@ -1,7 +1,10 @@
 package com.smp.coverartprovider
 
+import android.app.Activity
 import android.content.ContentUris
+import android.content.Context
 import android.content.res.AssetFileDescriptor
+import android.content.res.Resources
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.graphics.Bitmap
@@ -15,6 +18,7 @@ import android.provider.DocumentsProvider
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
+import android.view.WindowManager
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
@@ -25,9 +29,16 @@ fun LOGI(msg: String) {
 }
 
 class CoverArtProvider : DocumentsProvider() {
-    /**
-     * Default root projection: everything but Root.COLUMN_MIME_TYPES
-     */
+
+
+    val screenSize: Point
+        get() {
+            val x = Resources.getSystem().displayMetrics.widthPixels
+            val y = Resources.getSystem().displayMetrics.heightPixels
+            return Point(x, y)
+        }
+
+
     private val DEFAULT_ROOT_PROJECTION = arrayOf(
         Root.COLUMN_ROOT_ID,
         Root.COLUMN_FLAGS,
@@ -70,31 +81,38 @@ class CoverArtProvider : DocumentsProvider() {
         sizeHint: Point,
         signal: CancellationSignal
     ): AssetFileDescriptor? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return null
+        return AssetFileDescriptor(
+            fdFromAlbumId(documentId.toLong(), sizeHint), 0,
+            AssetFileDescriptor.UNKNOWN_LENGTH
+        )
+    }
+
+    private fun fdFromAlbumId(albumId: Long, sizeHint: Point): ParcelFileDescriptor? {
+        return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            null
         } else {
             val uri = ContentUris.withAppendedId(
                 MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
-                documentId.toLong()
+                albumId
             )
             val size = Size(sizeHint.x, sizeHint.y)
             val bitmap = context!!.contentResolver.loadThumbnail(uri, size, null)
-            // Write out the thumbnail to a temporary file
-            val tempFile: File = File.createTempFile("thumbnail", null, context!!.cacheDir)
 
-            FileOutputStream(tempFile).use { out ->
-                try {
-                    bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
-                } catch (e: IOException) {
-                    return null
-                }
-                return AssetFileDescriptor(
-                    ParcelFileDescriptor.open(
-                        tempFile,
-                        ParcelFileDescriptor.MODE_READ_ONLY
-                    ), 0,
-                    AssetFileDescriptor.UNKNOWN_LENGTH
-                )
+            fdFromBitmap(bitmap)
+        }
+    }
+
+    private fun fdFromBitmap(bitmap: Bitmap): ParcelFileDescriptor? {
+        val tempFile: File = File.createTempFile("image", "png", context!!.cacheDir)
+
+        FileOutputStream(tempFile).use { out ->
+            return try {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
+            } catch (e: IOException) {
+                null
+            } finally {
+                tempFile.delete()
             }
         }
     }
@@ -107,6 +125,7 @@ class CoverArtProvider : DocumentsProvider() {
             if (documentId == "root") {
                 makeRootRow(this)
             } else {
+                LOGI("query regular doc")
                 val album =
                     Album.getAllAlbums(context!!).find { it.albumId == documentId.toLong() }
                         ?: throw FileNotFoundException()
@@ -200,19 +219,10 @@ class CoverArtProvider : DocumentsProvider() {
     }
 
     override fun openDocument(
-        documentId: String?,
+        documentId: String,
         mode: String?,
         signal: CancellationSignal?
     ): ParcelFileDescriptor? {
-        LOGI("open doc " + documentId)
-        return null
-    }
-
-    override fun getDocumentType(documentId: String?): String? {
-        return if (documentId == "root") {
-            Document.MIME_TYPE_DIR
-        } else {
-            "application/octet-stream"
-        }
+        return fdFromAlbumId(documentId.toLong(), screenSize)
     }
 }

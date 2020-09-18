@@ -1,15 +1,15 @@
 package com.smp.coverartprovider
 
-import android.app.Activity
+import android.content.ContentResolver
 import android.content.ContentUris
-import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.content.res.Resources
 import android.database.Cursor
 import android.database.MatrixCursor
-import android.graphics.Bitmap
 import android.graphics.Point
+import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract.Document
@@ -17,12 +17,8 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.provider.MediaStore
 import android.util.Log
-import android.util.Size
-import android.view.WindowManager
 import java.io.File
 import java.io.FileNotFoundException
-import java.io.FileOutputStream
-import java.io.IOException
 
 fun LOGI(msg: String) {
     Log.i("COVERLOG", msg)
@@ -31,10 +27,10 @@ fun LOGI(msg: String) {
 class CoverArtProvider : DocumentsProvider() {
 
 
-    val screenSize: Point
+    val fullSize: Point
         get() {
-            val x = Resources.getSystem().displayMetrics.widthPixels
-            val y = Resources.getSystem().displayMetrics.heightPixels
+            val x = Resources.getSystem().displayMetrics.widthPixels * 2
+            val y = Resources.getSystem().displayMetrics.heightPixels * 2
             return Point(x, y)
         }
 
@@ -64,10 +60,9 @@ class CoverArtProvider : DocumentsProvider() {
     override fun onCreate(): Boolean = true
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
-        LOGI("queryROOTS")
         return MatrixCursor(projection ?: DEFAULT_ROOT_PROJECTION).apply {
             with(newRow()) {
-                add(Root.COLUMN_ROOT_ID, "rootroot")
+                add(Root.COLUMN_ROOT_ID, "root")
                 add(Root.COLUMN_DOCUMENT_ID, "root")
                 add(Root.COLUMN_TITLE, context!!.resources.getString(R.string.title_root))
                 add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY)
@@ -81,55 +76,49 @@ class CoverArtProvider : DocumentsProvider() {
         sizeHint: Point,
         signal: CancellationSignal
     ): AssetFileDescriptor? {
-        return AssetFileDescriptor(
-            fdFromAlbumId(documentId.toLong(), sizeHint), 0,
-            AssetFileDescriptor.UNKNOWN_LENGTH
-        )
-    }
-
-    private fun fdFromAlbumId(albumId: Long, sizeHint: Point): ParcelFileDescriptor? {
-        return if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            null
+        val album = Album.getAlbumFromId(context!!, documentId.toLong())
+        return if (album.isNotEmpty()) {
+            fdFromAlbum(album[0], fullSize)
         } else {
-            val uri = ContentUris.withAppendedId(
-                MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
-                albumId
-            )
-            val size = Size(sizeHint.x, sizeHint.y)
-            val bitmap = context!!.contentResolver.loadThumbnail(uri, size, null)
-
-            fdFromBitmap(bitmap)
+            null
         }
     }
 
-    private fun fdFromBitmap(bitmap: Bitmap): ParcelFileDescriptor? {
-        val tempFile: File = File.createTempFile("image", "png", context!!.cacheDir)
-
-        FileOutputStream(tempFile).use { out ->
-            return try {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_ONLY)
-            } catch (e: IOException) {
-                null
-            } finally {
-                tempFile.delete()
+    private fun fdFromAlbum(album: Album, sizeHint: Point): AssetFileDescriptor? {
+        val opts = Bundle().apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                putParcelable(ContentResolver.EXTRA_SIZE, sizeHint)
             }
+        }
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val uri = uriFromAlbum(album)
+                context!!.contentResolver.openTypedAssetFileDescriptor(
+                    uri, "image/*", opts
+                )
+            } else {
+                AssetFileDescriptor(ParcelFileDescriptor.open(
+                    File(album.artUri),
+                    ParcelFileDescriptor.MODE_READ_ONLY), 0,
+                    AssetFileDescriptor.UNKNOWN_LENGTH)
+            }
+
+        } catch (e: FileNotFoundException) {
+            null
         }
     }
 
 
     override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
-        //Fix, inefficient
         LOGI(documentId)
         return MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION).apply {
             if (documentId == "root") {
                 makeRootRow(this)
             } else {
-                LOGI("query regular doc")
-                val album =
-                    Album.getAllAlbums(context!!).find { it.albumId == documentId.toLong() }
-                        ?: throw FileNotFoundException()
-                makeAlbumRow(this, album)
+                val albums = Album.getAlbumFromId(context!!, documentId.toLong())
+                if (albums.isNotEmpty()) {
+                    makeAlbumRow(this, albums[0])
+                }
             }
         }
     }
@@ -141,7 +130,7 @@ class CoverArtProvider : DocumentsProvider() {
             add(Document.COLUMN_SUMMARY, "root")
             add(Document.COLUMN_FLAGS, 0)
             add(Document.COLUMN_MIME_TYPE, Document.MIME_TYPE_DIR)
-            add(Document.COLUMN_SIZE, 1000L)
+            add(Document.COLUMN_SIZE, 0L)
             add(Document.COLUMN_LAST_MODIFIED, System.currentTimeMillis())
         }
     }
@@ -202,18 +191,27 @@ class CoverArtProvider : DocumentsProvider() {
             albums.forEach { album ->
                 makeAlbumRow(this, album)
             }
-            LOGI("return count " + count)
+        }
+    }
+
+    private fun uriFromAlbum(album: Album): Uri {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            ContentUris.withAppendedId(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, album.albumId)
+        } else {
+            Uri.parse(album.artUri)
         }
     }
 
     private fun makeAlbumRow(cursor: MatrixCursor, album: Album) {
+
+        val size = fdFromAlbum(album, fullSize)?.length ?: 0L
         with(cursor.newRow()) {
-            add(Document.COLUMN_DOCUMENT_ID, album.albumId.toString())
+            add(Document.COLUMN_DOCUMENT_ID, album.albumId)
             add(Document.COLUMN_DISPLAY_NAME, album.albumName)
             add(Document.COLUMN_SUMMARY, album.artistName)
             add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
-            add(Document.COLUMN_MIME_TYPE, "image/png")
-            add(Document.COLUMN_SIZE, 0)
+            add(Document.COLUMN_MIME_TYPE, "image/*")
+            add(Document.COLUMN_SIZE, size)
             add(Document.COLUMN_LAST_MODIFIED, 0)
         }
     }
@@ -223,6 +221,11 @@ class CoverArtProvider : DocumentsProvider() {
         mode: String?,
         signal: CancellationSignal?
     ): ParcelFileDescriptor? {
-        return fdFromAlbumId(documentId.toLong(), screenSize)
+        val album = Album.getAlbumFromId(context!!, documentId.toLong())
+        return if (album.isNotEmpty()) {
+            fdFromAlbum(album[0], fullSize)?.parcelFileDescriptor
+        } else {
+            null
+        }
     }
 }

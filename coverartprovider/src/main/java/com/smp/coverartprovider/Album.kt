@@ -43,6 +43,17 @@ class Album constructor(
                 return buildAlbumList(cur, context.resources)
             }
         }
+        fun getAlbumFromId(context: Context, albumId: Long): List<Album> {
+            val albumSelection = MediaStore.Audio.Albums._ID + " = " + albumId
+            val cur = context.contentResolver.query(
+                MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI,
+                ALBUM_PROJECTION, albumSelection, null, AlbumSortOrder.ALBUM_A_Z)
+                ?: return emptyList()
+
+            cur.use {
+                return buildAlbumList(cur, context.resources)
+            }
+        }
         private fun buildAlbumList(cur: Cursor, res: Resources, artistId: Long = -1L): List<Album> {
             val albums = ArrayList<Album>(cur.count)
 

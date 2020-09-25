@@ -17,15 +17,17 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
 import java.io.File
 import java.io.FileNotFoundException
+import java.io.IOException
+import kotlin.system.measureTimeMillis
 
 fun LOGI(msg: String) {
     Log.i("COVERLOG", msg)
 }
 
 class CoverArtProvider : DocumentsProvider() {
-
 
     private val fullSize: Point
         get() {
@@ -109,7 +111,6 @@ class CoverArtProvider : DocumentsProvider() {
 
 
     override fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
-        LOGI(documentId)
         return MatrixCursor(projection ?: documentProjection).apply {
             if (documentId == "root") {
                 makeRootRow(this)
@@ -134,56 +135,11 @@ class CoverArtProvider : DocumentsProvider() {
         }
     }
 
-    interface SongSortOrder {
-        companion object {
-            const val SONG_A_Z = MediaStore.Audio.Media.DEFAULT_SORT_ORDER
-            const val SONG_Z_A = MediaStore.Audio.Media.DEFAULT_SORT_ORDER + " DESC"
-            const val SONG_MODIFIED_ASC = MediaStore.Audio.Media.DATE_MODIFIED
-            const val SONG_MODIFIED_DESC = MediaStore.Audio.Media.DATE_MODIFIED + " DESC"
-        }
-    }
-
-    /* val SONG_PROJECTION = arrayOf(
-         MediaStore.Audio.Media.TITLE,
-         MediaStore.Audio.Media._ID,
-         MediaStore.Audio.Media.ARTIST,
-         MediaStore.Audio.Media.ALBUM,
-         MediaStore.Audio.Media.DURATION,
-         MediaStore.Audio.Media.DATA,
-         MediaStore.Audio.Media.YEAR,
-         MediaStore.Audio.Media.DATE_ADDED,
-         MediaStore.Audio.Media.ALBUM_ID,
-         MediaStore.Audio.Media.ARTIST_ID,
-         MediaStore.Audio.Media.TRACK,
-         MediaStore.Audio.Media.DATE_MODIFIED,
-         MediaStore.Audio.Media.IS_ALARM,
-         MediaStore.Audio.Media.IS_RINGTONE,
-         MediaStore.Audio.Media.IS_PODCAST,
-         MediaStore.Audio.Media.IS_NOTIFICATION,
-         MediaStore.Audio.Media.IS_MUSIC)
-
-     fun getAllSongs(context: Context, sortOrder: String = SongSortOrder.SONG_A_Z): List<String> {
-         val musicSelection = MediaStore.Audio.Media.IS_MUSIC + " != 0" + " AND " + MediaStore.Audio.AudioColumns.TITLE + " != ''"
-         val cur = context.contentResolver.query(
-             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-             SONG_PROJECTION,
-             musicSelection,
-             null,
-             sortOrder
-         )
-             ?: return emptyList()
-         cur.use {
-             LOGI("songs = " + cur.count)
-             return listOf()
-         }
-     }*/
-
     override fun queryChildDocuments(
         parentDocumentId: String?,
         projection: Array<out String>?,
         sortOrder: String?
     ): Cursor {
-
         val albums = Album.getAllAlbums(context!!)
 
         return MatrixCursor(projection ?: documentProjection).apply {
@@ -202,24 +158,15 @@ class CoverArtProvider : DocumentsProvider() {
     }
 
     private fun makeAlbumRow(cursor: MatrixCursor, album: Album) {
-        val fd = fdFromAlbum(album, fullSize)
-        val modified = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val songs = Album.getAlbumSongs(context!!, album.albumId)
-            (songs.map { it.dateModified }.maxOrNull() ?: 0L) * 1000L
-        } else {
-            File(album.artUri).lastModified()
-        }
-        LOGI(" Mod " + modified)
-        if (fd != null) {
-            with(cursor.newRow()) {
-                add(Document.COLUMN_DOCUMENT_ID, album.albumId)
-                add(Document.COLUMN_DISPLAY_NAME, album.albumName)
-                add(Document.COLUMN_SUMMARY, album.artistName)
-                add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
-                add(Document.COLUMN_MIME_TYPE, "image/*")
-                add(Document.COLUMN_SIZE, fd.length)
-                add(Document.COLUMN_LAST_MODIFIED, modified)
-            }
+        //if (fdFromAlbum(album, Point(0, 0)) == null) return
+        with(cursor.newRow()) {
+            add(Document.COLUMN_DOCUMENT_ID, album.albumId)
+            add(Document.COLUMN_DISPLAY_NAME, album.albumName)
+            add(Document.COLUMN_SUMMARY, album.artistName)
+            add(Document.COLUMN_FLAGS, Document.FLAG_SUPPORTS_THUMBNAIL)
+            add(Document.COLUMN_MIME_TYPE, "image/*")
+            add(Document.COLUMN_SIZE, null)
+            add(Document.COLUMN_LAST_MODIFIED, null)
         }
     }
 

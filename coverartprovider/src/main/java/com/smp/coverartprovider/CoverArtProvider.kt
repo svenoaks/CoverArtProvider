@@ -2,11 +2,17 @@ package com.smp.coverartprovider
 
 import android.content.ContentResolver
 import android.content.ContentUris
+import android.content.Context
 import android.content.res.AssetFileDescriptor
+import android.content.res.Configuration
 import android.content.res.Resources
 import android.database.Cursor
 import android.database.MatrixCursor
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Point
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -17,11 +23,14 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.provider.MediaStore
 import android.util.Log
-import android.util.Size
+import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.content.ContextCompat
+import androidx.core.content.res.ResourcesCompat
+import androidx.core.graphics.drawable.DrawableCompat
+import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import java.io.FileNotFoundException
-import java.io.IOException
-import kotlin.system.measureTimeMillis
+import java.io.FileOutputStream
 
 fun LOGI(msg: String) {
     Log.i("COVERLOG", msg)
@@ -55,7 +64,57 @@ class CoverArtProvider : DocumentsProvider() {
         Document.COLUMN_SUMMARY
     )
 
-    override fun onCreate(): Boolean = true
+    override fun onCreate(): Boolean {
+        initDefaultCoverFiles()
+        return true
+    }
+
+    private val lightDefault get() = File(context!!.filesDir, "default.png")
+    private val darkDefault get() = File(context!!.filesDir, "default_dark.png")
+
+    private fun initDefaultCoverFiles() {
+
+        fun writeToFile(resId: Int, file: File) {
+            getBitmapFromVectorDrawable(resId)?.let { bm ->
+                try {
+                    FileOutputStream(file).use {
+                        bm.compress(Bitmap.CompressFormat.PNG, 100, it)
+                        it.fd.sync()
+                    }
+                } catch (ignored: Exception) {
+                    LOGI("write threw")
+                }
+            }
+        }
+
+        if (!lightDefault.exists()) writeToFile(R.drawable.ic_baseline_album_24, lightDefault)
+        if (!darkDefault.exists()) writeToFile(R.drawable.ic_baseline_album_24_night, darkDefault)
+    }
+
+    private fun getBitmapFromVectorDrawable(drawableId: Int): Bitmap? {
+        return AppCompatResources.getDrawable(context!!, drawableId)?.toBitmap()
+    }
+
+    private fun isNightModeOn(): Boolean {
+        val nightModeFlags = context!!.resources.configuration.uiMode and
+                Configuration.UI_MODE_NIGHT_MASK
+        return when (nightModeFlags) {
+            Configuration.UI_MODE_NIGHT_YES -> true
+            else -> false
+        }
+    }
+
+    private val defaultCover get() = if (isNightModeOn()) lightDefault else darkDefault
+    private val defaultCoverParcelFileDescriptor: AssetFileDescriptor
+        get() {
+            return AssetFileDescriptor(
+                ParcelFileDescriptor.open(
+                    defaultCover,
+                    ParcelFileDescriptor.MODE_READ_ONLY
+                ), 0,
+                AssetFileDescriptor.UNKNOWN_LENGTH
+            )
+        }
 
     override fun queryRoots(projection: Array<out String>?): Cursor {
         return MatrixCursor(projection ?: rootProjection).apply {
@@ -78,7 +137,7 @@ class CoverArtProvider : DocumentsProvider() {
         return if (album.isNotEmpty()) {
             fdFromAlbum(album[0], fullSize)
         } else {
-            null
+            defaultCoverParcelFileDescriptor
         }
     }
 
@@ -105,7 +164,7 @@ class CoverArtProvider : DocumentsProvider() {
             }
 
         } catch (e: FileNotFoundException) {
-            null
+            defaultCoverParcelFileDescriptor
         }
     }
 

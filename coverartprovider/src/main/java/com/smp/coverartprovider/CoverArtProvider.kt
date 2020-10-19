@@ -135,13 +135,13 @@ class CoverArtProvider : DocumentsProvider() {
     ): AssetFileDescriptor? {
         val album = Album.getAlbumFromId(context!!, documentId.toLong())
         return if (album.isNotEmpty()) {
-            fdFromAlbum(album[0], fullSize)
+            fdFromAlbum(album[0], fullSize, true)
         } else {
             defaultCoverParcelFileDescriptor
         }
     }
 
-    private fun fdFromAlbum(album: Album, sizeHint: Point): AssetFileDescriptor? {
+    private fun fdFromAlbum(album: Album, sizeHint: Point, useDefault: Boolean = false): AssetFileDescriptor? {
         val opts = Bundle().apply {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 putParcelable(ContentResolver.EXTRA_SIZE, sizeHint)
@@ -164,7 +164,7 @@ class CoverArtProvider : DocumentsProvider() {
             }
 
         } catch (e: FileNotFoundException) {
-            defaultCoverParcelFileDescriptor
+            if (useDefault) defaultCoverParcelFileDescriptor else null
         }
     }
 
@@ -217,7 +217,6 @@ class CoverArtProvider : DocumentsProvider() {
     }
 
     private fun makeAlbumRow(cursor: MatrixCursor, album: Album) {
-        //if (fdFromAlbum(album, Point(0, 0)) == null) return
         with(cursor.newRow()) {
             add(Document.COLUMN_DOCUMENT_ID, album.albumId)
             add(Document.COLUMN_DISPLAY_NAME, album.albumName)

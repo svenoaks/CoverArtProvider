@@ -2,17 +2,13 @@ package com.smp.coverartprovider
 
 import android.content.ContentResolver
 import android.content.ContentUris
-import android.content.Context
 import android.content.res.AssetFileDescriptor
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Canvas
 import android.graphics.Point
-import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -24,9 +20,6 @@ import android.provider.DocumentsProvider
 import android.provider.MediaStore
 import android.util.Log
 import androidx.appcompat.content.res.AppCompatResources
-import androidx.core.content.ContextCompat
-import androidx.core.content.res.ResourcesCompat
-import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.graphics.drawable.toBitmap
 import java.io.File
 import java.io.FileNotFoundException
@@ -121,7 +114,7 @@ class CoverArtProvider : DocumentsProvider() {
             with(newRow()) {
                 add(Root.COLUMN_ROOT_ID, "root")
                 add(Root.COLUMN_DOCUMENT_ID, "root")
-                add(Root.COLUMN_TITLE, context!!.resources.getString(R.string.title_root))
+                add(Root.COLUMN_TITLE, context!!.resources.getString(R.string.label_album_cover_art))
                 add(Root.COLUMN_FLAGS, Root.FLAG_LOCAL_ONLY)
                 add(Root.COLUMN_ICON, R.drawable.cover_art)
             }

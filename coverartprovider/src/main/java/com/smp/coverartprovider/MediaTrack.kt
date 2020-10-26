@@ -3,7 +3,6 @@ package com.smp.coverartprovider
 import android.content.Context
 import android.content.res.Resources
 import android.database.Cursor
-import android.os.Parcel
 import android.os.Parcelable
 import android.provider.MediaStore
 
@@ -12,7 +11,6 @@ import java.util.ArrayList
 import kotlinx.android.parcel.Parcelize
 import java.io.File
 import java.lang.IllegalStateException
-import java.lang.NullPointerException
 
 @Parcelize
 class MediaTrack constructor(
@@ -77,8 +75,8 @@ class MediaTrack constructor(
             val durationIndex = videoCur.getColumnIndex(MediaStore.Video.Media.DURATION)
             val dateModifiedIndex = videoCur.getColumnIndex(MediaStore.Video.Media.DATE_MODIFIED)
 
-            val unknownSong = res.getString(R.string.unknown_song)
-            val unknownAuthor = res.getString(R.string.unknown_artist)
+            val unknownSong = res.getString(R.string.label_unknown_artist_or_album)
+            val unknownAuthor = res.getString(R.string.label_unknown_artist_or_album)
 
             for (i in 0 until videoCur.count) {
                 try {
@@ -130,9 +128,9 @@ class MediaTrack constructor(
             val yearIndex = audioCur.getColumnIndex(MediaStore.Audio.Media.YEAR)
             val dateModifiedIndex = audioCur.getColumnIndex(MediaStore.Audio.Media.DATE_MODIFIED)
 
-            val unknownSong = res.getString(R.string.unknown_song)
-            val unknownAuthor = res.getString(R.string.unknown_artist)
-            val unknownAlbum = res.getString(R.string.unknown_album)
+            val unknownSong = res.getString(R.string.label_unknown_artist_or_album)
+            val unknownAuthor = res.getString(R.string.label_unknown_artist_or_album)
+            val unknownAlbum = res.getString(R.string.label_unknown_artist_or_album)
 
 
             for (i in 0 until audioCur.count) {

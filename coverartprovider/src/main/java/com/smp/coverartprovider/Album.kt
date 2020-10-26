@@ -101,8 +101,8 @@ class Album constructor(
             val yearIndex = cur.getColumnIndex(MediaStore.Audio.Albums.LAST_YEAR)
             val artIndex = cur.getColumnIndex(MediaStore.Audio.Albums.ALBUM_ART)
 
-            val unknownAlbum = res.getString(R.string.unknown_album)
-            val unknownArtist = res.getString(R.string.unknown_artist)
+            val unknownAlbum = res.getString(R.string.label_unknown_artist_or_album)
+            val unknownArtist = res.getString(R.string.label_unknown_artist_or_album)
             val unknownArtUri = ""
 
             for (i in 0 until cur.count) {
